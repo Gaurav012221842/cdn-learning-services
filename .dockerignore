@@ -1,0 +1,10 @@
+.git
+.DS_Store
+**/target
+**/node_modules
+learningapplicationfrontend/build
+learningapplicationfrontend/node_modules
+LearningPlatformApplication
+uploads
+.idea
+*.log

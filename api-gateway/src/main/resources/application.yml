@@ -1,0 +1,80 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+              - "http://127.0.0.1:3000"
+              - "${FRONTEND_URL:http://localhost:3000}"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
+      routes:
+        # Route 1: Auth & User Service (Port 8082)
+        - id: user-service-route
+          uri: ${USER_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/users/**
+
+        # Route 2: Media Service (Port 8084)
+        - id: media-service-route
+          uri: ${MEDIA_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/media/**, /api/admin/videos/multipart/**
+
+        # Route 3: Payment & Billing Service (Port 8085)
+        - id: payment-service-route
+          uri: ${PAYMENT_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/payments/**, /api/v1/coupons/**
+
+        # Route 4: Enrollment & Entitlement Service (Port 8086)
+        - id: enrollment-service-route
+          uri: ${ENROLLMENT_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/enrollments/**
+
+        # Route 5: Learning Experience & Progress Service (Port 8087)
+        - id: progress-service-route
+          uri: ${PROGRESS_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/progress/**, /api/v1/certificates/**, /api/v1/reviews/**, /api/v1/wishlist/**, /api/v1/wishlists/**
+
+        # Route 6: Course & Curriculum Catalog Service (Port 8083)
+        - id: course-service-route
+          uri: ${COURSE_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/courses/**, /api/v1/chapters/**, /api/v1/lessons/**, /api/v1/campaigns/**, /api/v1/pricing/**, /api/v1/search/**
+
+        # Route 7: Monolith Fallback Catch-all for remaining routes (Coupons, Wishlists, Reviews, Config, etc.)
+        - id: monolith-catchall-route
+          uri: ${MONOLITH_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/**
+
+jwt:
+  secret: ${JWT_SECRET:default_jwt_secret_key_for_development_environment_only}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always

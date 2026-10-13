@@ -44,7 +44,14 @@ A state-of-the-art, high-performance E-Learning Cloud Platform built with **Spri
 
 ```text
 CDN-Powered Learning Platform/
-├── LearningPlatformApplication/      # Core Spring Boot 3 REST API (Port 8080)
+├── learning-common/                  # Shared DTOs, Kafka Event Contracts & Security Headers
+├── api-gateway/                      # Spring Cloud Gateway (Port 8080)
+├── user-service/                     # Identity, Authentication & Profile Microservice (Port 8082)
+├── course-service/                   # Course Catalog, Curriculum & Pricing Microservice (Port 8083)
+├── media-service/                    # Cloudflare R2 Direct Multipart & Streaming CDN (Port 8084)
+├── payment-service/                  # Razorpay Billing, Webhooks & Coupon Microservice (Port 8085)
+├── enrollment-service/               # Course Entitlements & Access Revocation (Port 8086)
+├── progress-service/                 # Learning Progress, Certificates, Reviews & Wishlist (Port 8087)
 ├── video-worker/                     # FFmpeg HLS Transcoding Microservice (Port 8081)
 ├── learningapplicationfrontend/     # Modern React 19 Frontend Web Application (Port 3000)
 ├── infrastructure/                   # Docker Compose, Kafka, Redis & Prometheus Configs
@@ -57,24 +64,32 @@ CDN-Powered Learning Platform/
 
 ### 1. Run via Docker Compose
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
 
-### 2. Service Endpoints
-| Component | Service | Port / URL |
-| :--- | :--- | :--- |
-| **Frontend Web App** | React 19 SPA | `http://localhost:3000` |
-| **Core Backend API** | Spring Boot 3 | `http://localhost:8080` |
-| **Video Worker** | Spring Boot Microservice | `http://localhost:8081` |
-| **PostgreSQL Database**| PostgreSQL 18 | `localhost:5433` / `5432` |
-| **Redis Cache** | Redis 7 | `localhost:6379` |
-| **Kafka Event Broker** | Apache Kafka | `localhost:9092` |
+### 2. Service Endpoints Matrix
+| Component | Service | Port / Internal URL | Technology |
+| :--- | :--- | :--- | :--- |
+| **API Gateway** | Spring Cloud Gateway | `http://localhost:8080` | Netty / Reactive WebFlux |
+| **Frontend Web App** | React 19 SPA | `http://localhost:3000` | React 19 + Nginx |
+| **Identity & Users** | `user-service` | `http://localhost:8082` | Spring Boot 3 + Redis + JWT |
+| **Course Catalog** | `course-service` | `http://localhost:8083` | Spring Boot 3 + PostgreSQL |
+| **Media & CDN** | `media-service` | `http://localhost:8084` | Spring Boot 3 + AWS S3 v2 / Cloudflare R2 |
+| **Payments & Billing** | `payment-service` | `http://localhost:8085` | Spring Boot 3 + Razorpay |
+| **Enrollments** | `enrollment-service` | `http://localhost:8086` | Spring Boot 3 + Kafka Saga |
+| **Progress & Certs** | `progress-service` | `http://localhost:8087` | Spring Boot 3 + PostgreSQL |
+| **Video Worker** | `video-worker` | `http://localhost:8081` | Spring Boot 3 + FFmpeg |
+| **PostgreSQL Database**| PostgreSQL 15 | `localhost:5433` / `5432` | Relational Storage |
+| **Redis Cache** | Redis 7 | `localhost:6379` | In-Memory Token & State Cache |
+| **Kafka Event Broker** | Apache Kafka | `localhost:9092` | Distributed Event Streaming |
+| **Prometheus** | Monitoring Server | `http://localhost:9090` | Metrics Collector |
+| **Grafana** | Visual Dashboards | `http://localhost:3001` | Visualization |
 
 ---
 
 ## 📖 System Documentation Links
 
-- 📐 [System Architecture & Design](file:///Users/gauravkumar/Music/CDN-Powered%20Learning%20Platform/docs/architecture/system-design.md)
-- 🗄️ [Database Schema & Migration Design](file:///Users/gauravkumar/Music/CDN-Powered%20Learning%20Platform/docs/database/database-design.md)
-- 🔌 [Complete REST API Specification](file:///Users/gauravkumar/Music/CDN-Powered%20Learning%20Platform/docs/api/api-specification.md)
-- 📊 [Architectural Mermaid Diagrams](file:///Users/gauravkumar/Music/CDN-Powered%20Learning%20Platform/docs/diagrams/system-architecture.md)
+- 📐 [System Architecture & Design](file:///Users/gauravkumar/Pictures/CDN-Powered%20Learning%20Platform/docs/architecture/system-design.md)
+- 🗄️ [Database Schema & Migration Design](file:///Users/gauravkumar/Pictures/CDN-Powered%20Learning%20Platform/docs/database/database-design.md)
+- 🔌 [Complete REST API Specification](file:///Users/gauravkumar/Pictures/CDN-Powered%20Learning%20Platform/docs/api/api-specification.md)
+- 📊 [Architectural Mermaid Diagrams](file:///Users/gauravkumar/Pictures/CDN-Powered%20Learning%20Platform/docs/diagrams/system-architecture.md)

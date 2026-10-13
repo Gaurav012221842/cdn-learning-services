@@ -38,30 +38,152 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  backend-app:
+  # -------------------------------------------------------------
+  # Microservices Architecture
+  # -------------------------------------------------------------
+
+  api-gateway:
     build:
-      context: ./LearningPlatformApplication
-      dockerfile: Dockerfile
-    container_name: backend-app
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: api-gateway
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: dev
+      PORT: 8080
+      USER_SERVICE_URL: http://user-service:8082
+      COURSE_SERVICE_URL: http://course-service:8083
+      MEDIA_SERVICE_URL: http://media-service:8084
+      PAYMENT_SERVICE_URL: http://payment-service:8085
+      ENROLLMENT_SERVICE_URL: http://enrollment-service:8086
+      PROGRESS_SERVICE_URL: http://progress-service:8087
+      JWT_SECRET: ${JWT_SECRET:-default_jwt_secret_key_for_development_environment_only}
+    depends_on:
+      - user-service
+      - course-service
+      - media-service
+      - payment-service
+      - enrollment-service
+      - progress-service
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
       SPRING_DATASOURCE_URL: jdbc:postgresql://learning-platform-db:5432/learning_platform
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgrespassword}
       SPRING_REDIS_HOST: learning-platform-redis
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      JWT_SECRET: ${JWT_SECRET:-default_jwt_secret_key_for_development_environment_only}
     depends_on:
       - learning-platform-db
       - learning-platform-redis
       - kafka
 
+  course-service:
+    build:
+      context: .
+      dockerfile: course-service/Dockerfile
+    container_name: course-service
+    ports:
+      - "8083:8083"
+    environment:
+      PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:postgresql://learning-platform-db:5432/learning_platform
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgrespassword}
+      SPRING_REDIS_HOST: learning-platform-redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - learning-platform-db
+      - learning-platform-redis
+      - kafka
+
+  media-service:
+    build:
+      context: .
+      dockerfile: media-service/Dockerfile
+    container_name: media-service
+    ports:
+      - "8084:8084"
+    environment:
+      PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:postgresql://learning-platform-db:5432/learning_platform
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgrespassword}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      R2_ENDPOINT: ${R2_ENDPOINT:-https://account-id.r2.cloudflarestorage.com}
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY:-dev-access-key}
+      R2_SECRET_KEY: ${R2_SECRET_KEY:-dev-secret-key}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-learning-platform}
+      R2_CDN_URL: ${R2_CDN_URL:-https://pub-demo.r2.dev}
+    depends_on:
+      - learning-platform-db
+      - kafka
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    ports:
+      - "8085:8085"
+    environment:
+      PORT: 8085
+      SPRING_DATASOURCE_URL: jdbc:postgresql://learning-platform-db:5432/learning_platform
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgrespassword}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_mockkey123}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-mocksecret123}
+    depends_on:
+      - learning-platform-db
+      - kafka
+
+  enrollment-service:
+    build:
+      context: .
+      dockerfile: enrollment-service/Dockerfile
+    container_name: enrollment-service
+    ports:
+      - "8086:8086"
+    environment:
+      PORT: 8086
+      SPRING_DATASOURCE_URL: jdbc:postgresql://learning-platform-db:5432/learning_platform
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgrespassword}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - learning-platform-db
+      - kafka
+
+  progress-service:
+    build:
+      context: .
+      dockerfile: progress-service/Dockerfile
+    container_name: progress-service
+    ports:
+      - "8087:8087"
+    environment:
+      PORT: 8087
+      SPRING_DATASOURCE_URL: jdbc:postgresql://learning-platform-db:5432/learning_platform
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgrespassword}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - learning-platform-db
+      - kafka
+
   video-worker:
     build:
-      context: ./video-worker
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: video-worker/Dockerfile
     container_name: video-worker
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -76,7 +198,7 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend-app
+      - api-gateway
 
   prometheus:
     image: prom/prometheus:latest
@@ -86,7 +208,7 @@ services:
     volumes:
       - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     depends_on:
-      - backend-app
+      - api-gateway
 
   grafana:
     image: grafana/grafana:latest
@@ -103,4 +225,3 @@ services:
 volumes:
   pgdata:
   grafana-data:
-

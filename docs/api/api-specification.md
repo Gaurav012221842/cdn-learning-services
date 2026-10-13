@@ -1,85 +1,72 @@
 # Complete REST API Specification
 
+All external requests are routed through the **API Gateway** on port `8080`:
 Base Endpoint: `http://localhost:8080/api/v1`
 
 ---
 
-## 🔐 1. Authentication Endpoints (`/api/v1/auth`)
+## 🔐 1. Authentication & Users (`user-service` - Port 8082)
 
 ### `POST /api/v1/auth/register`
 Registers a new user (Student or Admin).
 - **Request Body**:
   ```json
   {
-    "email": "user@example.com",
+    "email": "student@example.com",
     "password": "Password123!",
     "fullName": "Gaurav Student",
     "role": "STUDENT"
   }
   ```
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "message": "User registered successfully",
-    "data": {
-      "id": "a1b2c3d4-5678-90ef-1234-567890abcdef",
-      "token": "eyJhbGciOiJIUzI1NiJ9...",
-      "email": "user@example.com",
-      "fullName": "Gaurav Student",
-      "role": "STUDENT",
-      "avatarUrl": null
-    }
-  }
-  ```
+- **Response `200 OK`**: `ApiResponse<AuthResponse>` containing JWT token, ID, email, role.
 
 ### `POST /api/v1/auth/login`
-Authenticates a user and generates JWT.
+Authenticates a user and issues a JWT token. Also registers/updates active device session.
 - **Request Body**:
   ```json
   {
-    "email": "user@example.com",
+    "email": "student@example.com",
     "password": "Password123!"
   }
   ```
-- **Response `200 OK`**: `AuthResponse` containing JWT token and user profile details.
+- **Response `200 OK`**: `ApiResponse<AuthResponse>`
+
+### `GET /api/v1/users/me`
+Retrieves currently authenticated user profile based on `X-User-Id` / JWT.
+
+### `GET /api/v1/users/sessions`
+Returns active device sessions for current user.
 
 ---
 
-## 📚 2. Course & Curriculum Endpoints (`/api/v1/courses`)
+## 📚 2. Courses & Curriculum (`course-service` - Port 8083)
 
 ### `GET /api/v1/courses` (Public)
-Retrieves all published courses for Explore Courses catalog.
+Retrieves all published courses for the Explore Courses catalog.
 
 ### `GET /api/v1/courses/{id}` (Public)
-Retrieves course details along with chapters and lesson curriculum.
+Retrieves full course curriculum including chapters and lessons.
 
 ### `POST /api/v1/courses` (Admin)
-Creates a new course with multi-chapter curriculum.
+Creates a new course with chapters and multi-format lessons.
 - **Request Body**:
   ```json
   {
-    "title": "Full-Stack System Architecture & Distributed Systems",
-    "description": "Master microservices, Redis caching, Kafka streaming, and Cloudflare CDN.",
+    "title": "Full-Stack Microservices Masterclass",
+    "description": "Master distributed systems, Kafka, Redis, and Spring Cloud.",
     "price": 49.99,
     "thumbnailUrl": "https://pub-xxx.r2.dev/thumbnail.jpg",
     "chapters": [
       {
-        "title": "Chapter 1: System Design",
+        "title": "Chapter 1: Architecture",
         "sequenceOrder": 1,
         "lessons": [
           {
-            "title": "Lesson 1: Intro to Kafka",
+            "title": "Lesson 1: Microservices vs Monolith",
             "lessonType": "VIDEO",
             "contentUrl": "https://pub-xxx.r2.dev/video.mp4",
             "videoThumbnailUrl": "https://pub-xxx.r2.dev/thumb.jpg",
             "sequenceOrder": 1
-          },
-          {
-            "title": "Lesson 2: System Architecture Quiz",
-            "lessonType": "QUIZ",
-            "quizData": "{\"questions\":[{\"question\":\"What is Kafka?\",\"options\":[\"Queue\",\"DB\"],\"correctIndex\":0}]}",
-            "sequenceOrder": 2
           }
         ]
       }
@@ -87,25 +74,31 @@ Creates a new course with multi-chapter curriculum.
   }
   ```
 
+### `GET /api/v1/courses/search?q={query}`
+Searches published courses by title or keyword.
+
+### `GET /api/v1/courses/{id}/pricing`
+Gets dynamic price calculations, active campaign discounts, and currency details.
+
 ---
 
-## 📁 3. Media Upload & Presigned Storage Endpoints (`/api/v1/media`)
+## 📁 3. Media Upload & CDN Streaming (`media-service` - Port 8084)
 
 ### `POST /api/v1/media/presigned-url`
 Generates a signed Cloudflare R2 upload URL for direct client multipart uploads.
 
 ### `POST /api/v1/media/upload-direct`
-Direct multipart upload fallback to Cloudflare R2 bucket.
+Direct multipart upload fallback to Cloudflare R2 bucket. Publishes `MediaTranscodingEvent` to Kafka.
 
-### `GET /api/v1/media/signed-url`
-Generates a 60-second presigned streaming URL for secure media playback.
+### `GET /api/v1/media/signed-url?objectKey={key}`
+Generates a 60-second presigned streaming URL for secure HLS playback.
 
 ---
 
-## 💳 4. Razorpay Payment Endpoints (`/api/v1/payments`)
+## 💳 4. Payments & Coupons (`payment-service` - Port 8085)
 
 ### `POST /api/v1/payments/initiate`
-Initiates a Razorpay payment order.
+Initiates a Razorpay order.
 - **Query Params**: `userId`, `userEmail`, `courseId`, `amount`
 - **Response `200 OK`**:
   ```json
@@ -120,29 +113,51 @@ Initiates a Razorpay payment order.
   ```
 
 ### `POST /api/v1/payments/verify`
-Verifies Razorpay HMAC SHA256 payment signature and auto-completes enrollment.
+Verifies HMAC-SHA256 signature and publishes `PaymentCompletedEvent` to Kafka topic `payment-completed-events`.
 - **Query Params**: `razorpayOrderId`, `razorpayPaymentId`, `signature`, `userId`, `userEmail`, `courseId`, `amount`
+
+### `POST /api/v1/coupons/validate`
+Validates promotional coupon code for discount eligibility.
 
 ---
 
-## 🎓 5. Student Enrollment Endpoints (`/api/v1/enrollments`)
-
-### `POST /api/v1/enrollments`
-Enrolls a student in a course.
-- **Query Params**: `studentId`, `studentEmail`, `courseId`
+## 🎓 5. Enrollments (`enrollment-service` - Port 8086)
 
 ### `GET /api/v1/enrollments/student/{studentId}`
-Checks if a student is enrolled in courses.
+Returns list of enrolled course IDs for access entitlement checks.
+
+### `GET /api/v1/enrollments/check?studentId={id}&courseId={courseId}`
+Returns boolean whether student has active enrollment.
 
 ### `GET /api/v1/enrollments/all` (Admin)
 Retrieves all student enrollments with student name, email, and course title.
 
 ### `DELETE /api/v1/enrollments/{id}` (Admin)
-Revokes/deletes a student's course access from PostgreSQL.
+Revokes student course access with immediate cache invalidation.
 
 ---
 
-## ⚙️ 6. Video Worker Endpoint (`video-worker`)
+## 📈 6. Progress, Certificates, Reviews & Wishlist (`progress-service` - Port 8087)
+
+### `POST /api/v1/progress`
+Marks a lesson as completed for the student.
+- **Query Params**: `studentId`, `lessonId`, `completed`
+
+### `GET /api/v1/progress/course/{courseId}?studentId={studentId}`
+Returns student completion percentage and completed lesson list.
+
+### `POST /api/v1/certificates/issue`
+Issues a course completion certificate if 100% completed.
+
+### `POST /api/v1/reviews`
+Submits student course rating and review.
+
+### `GET /api/v1/wishlists/student/{studentId}`
+Retrieves bookmarked courses for student.
+
+---
+
+## ⚙️ 7. Video Worker (`video-worker` - Port 8081)
 
 ### `GET http://localhost:8081/api/v1/worker/status`
-Exposes video transcoding worker health and Kafka topic telemetry.
+Exposes video transcoding worker health, worker concurrency, and Kafka consumer group lag.

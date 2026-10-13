@@ -1,13 +1,26 @@
-# Comprehensive Database Schema Design
+# Comprehensive Database Schema Design & Microservices Domain Mapping
 
-The platform uses **PostgreSQL 18** managed via **Flyway Schema Migrations** (`db/migration/V1__...` through `V16__...`).
+The platform runs on **PostgreSQL** with logical domain separation per microservice, allowing either a single shared PostgreSQL instance (development/staging) or isolated per-service databases (production):
 
 ---
 
-## 🗄️ Database Tables Specification
+## 🗄️ Domain-to-Service Table Mapping
 
-### 1. `users` (V1, V15)
-Stores platform users (Students, Admins, Instructors).
+| Microservice | Port | Tables Owned | Domain Responsibility |
+| :--- | :--- | :--- | :--- |
+| **`user-service`** | 8082 | `users`, `user_device_sessions`, `password_reset_tokens` | Identity, Auth, Device Tracking |
+| **`course-service`** | 8083 | `courses`, `chapters`, `lessons`, `course_pricing`, `campaigns` | Course Catalog, Curriculum, Pricing |
+| **`media-service`** | 8084 | `media` | Cloudflare R2 Upload Metadata & CDN Keys |
+| **`payment-service`** | 8085 | `payments`, `coupons` | Razorpay Orders, Signatures, Vouchers |
+| **`enrollment-service`** | 8086 | `enrollments` | Student Entitlements & Access Grants |
+| **`progress-service`** | 8087 | `course_progress`, `certificates`, `reviews`, `wishlists` | Student Progress, Certs, Ratings |
+
+---
+
+## 📋 Microservice Tables Detail
+
+### 1. `user-service`
+#### `users`
 - `id` (UUID, Primary Key)
 - `email` (VARCHAR(255), Unique, Not Null)
 - `password_hash` (VARCHAR(255), Not Null)
@@ -17,43 +30,55 @@ Stores platform users (Students, Admins, Instructors).
 - `created_at` (TIMESTAMP WITH TIME ZONE)
 - `updated_at` (TIMESTAMP WITH TIME ZONE)
 
-### 2. `courses` (V2)
-Stores course master data.
+#### `user_device_sessions`
+- `id` (UUID, Primary Key)
+- `user_id` (UUID, Not Null)
+- `device_fingerprint` (VARCHAR(255))
+- `device_name` (VARCHAR(255))
+- `ip_address` (VARCHAR(100))
+- `last_active_at` (TIMESTAMP WITH TIME ZONE)
+
+---
+
+### 2. `course-service`
+#### `courses`
 - `id` (UUID, Primary Key)
 - `title` (VARCHAR(255), Not Null)
 - `description` (TEXT)
-- `instructor_id` (UUID, FK -> `users.id`)
+- `instructor_id` (UUID)
 - `price` (DECIMAL(38,2), Not Null)
 - `status` (VARCHAR(50), Default 'DRAFT')
+- `thumbnail_url` (VARCHAR(1000))
 - `created_at` (TIMESTAMP WITH TIME ZONE)
 - `updated_at` (TIMESTAMP WITH TIME ZONE)
 
-### 3. `chapters` (V16)
-Stores curriculum chapters within courses.
+#### `chapters`
 - `id` (UUID, Primary Key)
-- `course_id` (UUID, Not Null, FK -> `courses.id`)
+- `course_id` (UUID, Not Null)
 - `title` (VARCHAR(255), Not Null)
 - `sequence_order` (INTEGER, Not Null, Default 1)
 - `created_at` (TIMESTAMP WITH TIME ZONE)
 
-### 4. `lessons` (V3, V16)
-Stores learning lessons (Video, PDF, Image, Quiz).
+#### `lessons`
 - `id` (UUID, Primary Key)
-- `course_id` (UUID, FK -> `courses.id`)
-- `chapter_id` (UUID, FK -> `chapters.id`)
+- `course_id` (UUID, Not Null)
+- `chapter_id` (UUID)
 - `title` (VARCHAR(255), Not Null)
 - `description` (TEXT)
-- `content` (TEXT)
-- `lesson_type` (VARCHAR(255)) -- VIDEO, IMAGE, PDF, QUIZ
+- `lesson_type` (VARCHAR(50)) -- VIDEO, IMAGE, PDF, QUIZ
 - `content_url` (TEXT)
 - `video_thumbnail_url` (TEXT)
-- `quiz_data` (TEXT) -- JSON Encoded Quiz questions and answers
-- `media_id` (UUID, FK -> `media.id`)
+- `quiz_data` (TEXT) -- JSON Encoded Quiz
 - `sequence_order` (INTEGER)
 - `created_at` (TIMESTAMP WITH TIME ZONE)
 
-### 5. `media` (V4)
-Stores metadata for Cloudflare R2 uploaded files.
+#### `course_pricing` & `campaigns`
+- Manages pricing tiers, seasonal discounts, and campaign periods.
+
+---
+
+### 3. `media-service`
+#### `media`
 - `id` (UUID, Primary Key)
 - `file_name` (VARCHAR(255), Not Null)
 - `file_type` (VARCHAR(50), Not Null) -- VIDEO, IMAGE, PDF, REEL
@@ -61,104 +86,55 @@ Stores metadata for Cloudflare R2 uploaded files.
 - `file_size` (BIGINT)
 - `duration` (INTEGER)
 - `status` (VARCHAR(50), Not Null, Default 'READY')
-- `uploader_id` (UUID, FK -> `users.id`)
+- `uploader_id` (UUID)
 - `created_at` (TIMESTAMP WITH TIME ZONE)
 
-### 6. `enrollments` (V5)
-Stores student course enrollments.
-- `id` (UUID, Primary Key)
-- `student_id` (UUID, Not Null, FK -> `users.id`)
-- `course_id` (UUID, Not Null, FK -> `courses.id`)
-- `enrolled_at` (TIMESTAMP WITH TIME ZONE)
-- `CONSTRAINT unique_student_course UNIQUE(student_id, course_id)`
+---
 
-### 7. `payments` (V9)
-Stores Razorpay payment transaction logs.
+### 4. `payment-service`
+#### `payments`
 - `id` (UUID, Primary Key)
-- `user_id` (UUID, Not Null, FK -> `users.id`)
-- `course_id` (UUID, Not Null, FK -> `courses.id`)
+- `user_id` (UUID, Not Null)
+- `course_id` (UUID, Not Null)
 - `amount` (DECIMAL(38,2), Not Null)
 - `razorpay_order_id` (VARCHAR(255))
 - `razorpay_payment_id` (VARCHAR(255))
 - `status` (VARCHAR(50), Not Null, Default 'PENDING') -- PENDING, COMPLETED, FAILED
 - `created_at` (TIMESTAMP WITH TIME ZONE)
 
-### 8. `course_pricing` (V6)
-Stores pricing history and discount structures.
-- `id` (UUID, Primary Key)
-- `course_id` (UUID, Not Null, FK -> `courses.id`)
-- `base_price` (DECIMAL(38,2), Not Null)
-- `discount_price` (DECIMAL(38,2))
-- `currency` (VARCHAR(10), Default 'USD')
-
-### 9. `campaigns` (V7)
-Stores marketing campaigns and flash sales.
-- `id` (UUID, Primary Key)
-- `title` (VARCHAR(255), Not Null)
-- `discount_percentage` (DECIMAL(38,2), Not Null)
-- `start_date` (TIMESTAMP WITH TIME ZONE)
-- `end_date` (TIMESTAMP WITH TIME ZONE)
-- `is_active` (BOOLEAN, Default true)
-
-### 10. `coupons` (V8)
-Stores promotional discount coupons.
+#### `coupons`
 - `id` (UUID, Primary Key)
 - `code` (VARCHAR(50), Unique, Not Null)
 - `discount_amount` (DECIMAL(38,2), Not Null)
 - `expiry_date` (TIMESTAMP WITH TIME ZONE)
 - `usage_limit` (INTEGER)
 
-### 11. `course_progress` (V10)
-Tracks student lesson completion.
-- `id` (UUID, Primary Key)
-- `student_id` (UUID, Not Null, FK -> `users.id`)
-- `lesson_id` (UUID, Not Null, FK -> `lessons.id`)
-- `is_completed` (BOOLEAN, Default false)
-- `completed_at` (TIMESTAMP WITH TIME ZONE)
+---
 
-### 12. `certificates` (V11)
-Stores generated course completion certificates.
+### 5. `enrollment-service`
+#### `enrollments`
 - `id` (UUID, Primary Key)
-- `student_id` (UUID, Not Null, FK -> `users.id`)
-- `course_id` (UUID, Not Null, FK -> `courses.id`)
-- `certificate_url` (VARCHAR(500))
-- `issued_at` (TIMESTAMP WITH TIME ZONE)
-
-### 13. `reviews` (V12)
-Stores student course ratings and reviews.
-- `id` (UUID, Primary Key)
-- `student_id` (UUID, Not Null, FK -> `users.id`)
-- `course_id` (UUID, Not Null, FK -> `courses.id`)
-- `rating` (INTEGER, Not Null)
-- `comment` (TEXT)
-- `created_at` (TIMESTAMP WITH TIME ZONE)
-
-### 14. `wishlists` (V13)
-Stores student saved courses.
-- `id` (UUID, Primary Key)
-- `student_id` (UUID, Not Null, FK -> `users.id`)
-- `course_id` (UUID, Not Null, FK -> `courses.id`)
-
-### 15. `audit_logs` (V14)
-Stores system audit and security events.
-- `id` (UUID, Primary Key)
-- `user_id` (UUID)
-- `action` (VARCHAR(255), Not Null)
-- `details` (TEXT)
-- `created_at` (TIMESTAMP WITH TIME ZONE)
+- `student_id` (UUID, Not Null)
+- `course_id` (UUID, Not Null)
+- `enrolled_at` (TIMESTAMP WITH TIME ZONE)
+- `CONSTRAINT unique_student_course UNIQUE(student_id, course_id)`
 
 ---
 
-## 🔗 Entity Relationship Summary (Mermaid)
+### 6. `progress-service`
+#### `course_progress`
+- `id` (UUID, Primary Key)
+- `student_id` (UUID, Not Null)
+- `lesson_id` (UUID, Not Null)
+- `is_completed` (BOOLEAN, Default false)
+- `completed_at` (TIMESTAMP WITH TIME ZONE)
 
-```mermaid
-erDiagram
-    users ||--o{ courses : "instructs"
-    users ||--o{ enrollments : "enrolls"
-    users ||--o{ payments : "makes"
-    courses ||--o{ chapters : "contains"
-    chapters ||--o{ lessons : "groups"
-    courses ||--o{ enrollments : "has"
-    courses ||--o{ payments : "purchased_in"
-    lessons ||--o| media : "references"
-```
+#### `certificates`
+- `id` (UUID, Primary Key)
+- `student_id` (UUID, Not Null)
+- `course_id` (UUID, Not Null)
+- `certificate_url` (VARCHAR(500))
+- `issued_at` (TIMESTAMP WITH TIME ZONE)
+
+#### `reviews` & `wishlists`
+- Ratings, reviews comments, and student wishlist items.

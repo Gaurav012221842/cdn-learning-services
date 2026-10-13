@@ -1,16 +1,24 @@
-name: Backend CI
+name: Microservices Backend CI
 
 on:
   push:
     branches: [ main, develop ]
     paths:
-      - 'LearningPlatformApplication/**'
+      - 'pom.xml'
+      - 'learning-common/**'
+      - 'api-gateway/**'
+      - 'user-service/**'
+      - 'course-service/**'
+      - 'media-service/**'
+      - 'payment-service/**'
+      - 'enrollment-service/**'
+      - 'progress-service/**'
       - 'video-worker/**'
   pull_request:
     branches: [ main, develop ]
 
 jobs:
-  build-learning-platform:
+  build-and-verify-microservices:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,25 +31,5 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build LearningPlatformApplication
-        run: |
-          cd LearningPlatformApplication
-          mvn clean test-compile
-
-  build-video-worker:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Build video-worker
-        run: |
-          cd video-worker
-          mvn clean test-compile
+      - name: Build All Microservices & Shared Libraries
+        run: mvn clean test-compile -DskipTests

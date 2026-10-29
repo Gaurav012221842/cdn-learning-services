@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppProviders } from './providers';
 import { renderRoute } from './routes';
+import AiAssistantWidget from '../components/common/AiAssistantWidget';
 
 const App = () => {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
@@ -16,6 +17,7 @@ const App = () => {
   return (
     <AppProviders>
       {renderRoute(currentPath)}
+      <AiAssistantWidget />
     </AppProviders>
   );
 };
